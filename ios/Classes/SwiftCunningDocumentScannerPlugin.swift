@@ -2,9 +2,10 @@ import Flutter
 import UIKit
 import Vision
 import VisionKit
+import Photos
 
 @available(iOS 13.0, *)
-public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerDelegate {
+public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
    var resultChannel :FlutterResult?
    var presentingController: VNDocumentCameraViewController?
 
@@ -21,11 +22,18 @@ public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocum
             self.presentingController = VNDocumentCameraViewController()
             self.presentingController!.delegate = self
             presentedVC?.present(self.presentingController!, animated: true)
-        } else {
-            result(FlutterMethodNotImplemented)
-            return
-        }
-  }
+    } else if call.method == "getPictureFromGallery" {
+        self.resultChannel = result
+        let imagePicker = UIImagePickerController()
+        imagePicker.delegate = self
+        imagePicker.sourceType = .photoLibrary // Choose the photo library as the source
+        let presentedVC = UIApplication.shared.keyWindow?.rootViewController
+        presentedVC?.present(imagePicker, animated: true)
+    } else {
+        result(FlutterMethodNotImplemented)
+        return
+    }
+}
 
 
     func getDocumentsDirectory() -> URL {
@@ -59,5 +67,34 @@ public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocum
     public func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
         resultChannel?(nil)
         presentingController?.dismiss(animated: true)
+    }
+
+    public func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        guard let image = info[.originalImage] as? UIImage else {
+            self.resultChannel?(nil)
+            picker.dismiss(animated: true)
+            return
+        }
+        
+        // Optionally, convert the UIImage to a format suitable for your Flutter app
+        let tempDirPath = getDocumentsDirectory()
+        let currentDateTime = Date()
+        let df = DateFormatter()
+        df.dateFormat = "yyyyMMdd-HHmmss"
+        let formattedDate = df.string(from: currentDateTime)
+        let url = tempDirPath.appendingPathComponent(formattedDate + ".png")
+        if let imageData = image.pngData() {
+            try? imageData.write(to: url)
+            self.resultChannel?([url.path])
+        } else {
+            self.resultChannel?(nil)
+        }
+        
+        picker.dismiss(animated: true)
+    }
+
+    public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        self.resultChannel?(nil)
+        picker.dismiss(animated: true)
     }
 }
